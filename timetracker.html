@@ -18,9 +18,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Segoe UI',san
 
 /* ナビ */
 .nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:600px;background:#fff;border-top:1px solid #e8e8e8;display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom)}
-.nav-btn{flex:1;padding:10px 0 8px;border:none;background:none;font-size:10px;color:#aaa;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+.nav-btn{flex:1;padding:8px 4px 6px;border:none;background:none;font-size:9px;color:#aaa;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
 .nav-btn.active{color:#5b6af0;font-weight:600}
-.nav-icon{font-size:20px;line-height:1}
+.nav-btn span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;text-align:center}
+.nav-icon{font-size:22px;line-height:1}
 
 /* ページ */
 .page{display:none;padding-bottom:calc(64px + env(safe-area-inset-bottom))}
@@ -300,7 +301,24 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Segoe UI',san
 <script>
 // ── 定数 ──
 const COLORS = ['#5b6af0','#ff6b6b','#ffa94d','#51cf66','#339af0','#cc5de8','#f06595','#20c997','#fd7e14','#74c0fc','#a9e34b','#e599f7'];
-const EMOJIS = ['💼','📚','🏃','🍽','😴','🎮','🎵','✏️','💪','🧘','🌿','🚗','📱','💬','🛒','🧹','💰','🎨','✈️','❤️','⭐','🔥'];
+const EMOJIS = [
+  // 仕事・学習
+  '💼','📚','✏️','📝','💻','🖥️','📊','📈','📋','🗂️','📌','🔍','💡','🎯','🏆','📖','🔬','⚗️','📐','🖊️',
+  // 健康・運動
+  '🏃','💪','🧘','🚴','🏋️','⚽','🏊','🎾','🧗','🥊','🏃‍♀️','🤸','🛌','💊','🩺','🧬','🥗','🥦','💧','🫁',
+  // 生活・家事
+  '🍽','😴','🛒','🧹','🍳','🛁','🧺','🪴','🐕','🐈','🍵','☕','🧃','🍱','🛁','🪣','🔧','🪛','🏠','🪟',
+  // 趣味・娯楽
+  '🎮','🎵','🎨','🎬','📷','🎸','🎹','🎲','♟️','🎭','📺','🎤','🎧','🎻','🎺','🖌️','✂️','🧩','🃏','🎰',
+  // 移動・外出
+  '🚗','✈️','🚶','🚌','🚃','🛵','🚲','⛽','🗺️','🏖️','🏔️','🌆','🛫','🚕','🚁','⛵','🧳','🗼','🏕️','🚦',
+  // コミュニケーション
+  '📱','💬','📧','📞','👥','🤝','💌','📣','🗣️','👋',
+  // お金・ビジネス
+  '💰','💳','🏦','📑','🤑','💹','🏢','🪙','💎','🔑',
+  // 感情・その他
+  '❤️','⭐','🔥','😊','🙏','✅','🎉','💫','🌈','🌟'
+];
 
 // ── 状態（localStorage破損対策）──
 function safeLoad(key, fallback) {
