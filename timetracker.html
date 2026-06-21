@@ -302,10 +302,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Segoe UI',san
 const COLORS = ['#5b6af0','#ff6b6b','#ffa94d','#51cf66','#339af0','#cc5de8','#f06595','#20c997','#fd7e14','#74c0fc','#a9e34b','#e599f7'];
 const EMOJIS = ['💼','📚','🏃','🍽','😴','🎮','🎵','✏️','💪','🧘','🌿','🚗','📱','💬','🛒','🧹','💰','🎨','✈️','❤️','⭐','🔥'];
 
-// ── 状態 ──
-let tasks   = JSON.parse(localStorage.getItem('tt_tasks')   || '[]');
-let records = JSON.parse(localStorage.getItem('tt_records') || '[]');
-let active  = JSON.parse(localStorage.getItem('tt_active')  || 'null');
+// ── 状態（localStorage破損対策）──
+function safeLoad(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
+}
+let tasks   = safeLoad('tt_tasks',   []);
+let records = safeLoad('tt_records', []);
+let active  = safeLoad('tt_active',  null);
 
 let selColor = COLORS[0], selEmoji = EMOJIS[0];
 let editTaskId = null, delTaskId = null;
@@ -355,13 +358,15 @@ function renderTasks() {
     document.getElementById('hdr-sub').textContent = '';
     return;
   }
-  const runSec = active ? Math.floor((Date.now() - active.startTime) / 1000) : 0;
+  // 日付またぎ対策：今日分だけ加算
+  const activeIsToday = active && dateStr(new Date(active.startTime)) === todayStr();
+  const runSec = activeIsToday ? Math.floor((Date.now() - active.startTime) / 1000) : 0;
   const todayTot = getTodayTotalSec() + runSec;
   document.getElementById('hdr-sub').textContent = todayTot > 0 ? `今日の合計：${fmt(todayTot)}` : '今日の記録：まだなし';
 
   el.innerHTML = tasks.map(t => {
     const running = active && active.taskId === t.id;
-    const elapsed = running ? Math.floor((Date.now() - active.startTime) / 1000) : 0;
+    const elapsed = (running && activeIsToday) ? Math.floor((Date.now() - active.startTime) / 1000) : 0;
     const todaySec = getTodaySecFor(t.id) + elapsed;
     const goalSec = (t.goal || 0) * 60;
     const pct = goalSec > 0 ? Math.min(100, Math.round(todaySec / goalSec * 100)) : -1;
@@ -462,7 +467,11 @@ function saveTask() {
 function askDelTask(id) { delTaskId = id; openModal('modal-del-task'); }
 function confirmDelTask() {
   if (!delTaskId) return;
-  if (active && active.taskId === delTaskId) { active = null; localStorage.removeItem('tt_active'); }
+  if (active && active.taskId === delTaskId) {
+    // 削除前に計測中の時間を保存してから解除
+    saveActiveRec(active.taskId, active.startTime, Date.now());
+    active = null; localStorage.removeItem('tt_active');
+  }
   tasks   = tasks.filter(t => t.id !== delTaskId);
   records = records.filter(r => r.taskId !== delTaskId);
   saveTasks(); saveRecs(); delTaskId = null;
@@ -569,15 +578,23 @@ function saveRec() {
   const baseDate = new Date(date + 'T00:00:00');
   const startTime = new Date(baseDate).setHours(sh, sm, 0, 0);
   let   endTime   = new Date(baseDate).setHours(eh, em, 0, 0);
-  if (endTime <= startTime) endTime += 86400000; // 翌日またぎ
+  if (endTime === startTime) { alert('開始時刻と終了時刻が同じです'); return; }
+  if (endTime < startTime) endTime += 86400000; // 翌日またぎ
   const duration = Math.floor((endTime - startTime) / 1000);
-  if (duration <= 0) { alert('終了時刻は開始時刻より後にしてください'); return; }
 
   if (editRecId) {
     const r = records.find(x => x.id === editRecId);
     r.taskId = taskId; r.date = date; r.startTime = startTime; r.endTime = endTime; r.duration = duration;
   } else {
-    records.push({ id: genId(), taskId, date, startTime, endTime, duration });
+    // 日付またぎの場合は日ごとに分割して保存
+    let cursor = startTime;
+    while (cursor < endTime) {
+      const midnight = new Date(new Date(cursor).getFullYear(), new Date(cursor).getMonth(), new Date(cursor).getDate() + 1).getTime();
+      const segEnd = Math.min(midnight, endTime);
+      const dur = Math.floor((segEnd - cursor) / 1000);
+      if (dur > 0) records.push({ id: genId(), taskId, date: dateStr(new Date(cursor)), startTime: cursor, endTime: segEnd, duration: dur });
+      cursor = segEnd;
+    }
   }
   saveRecs(); closeModal('modal-rec'); renderRecList(); renderTasks();
 }
@@ -729,6 +746,8 @@ function importJSON(e) {
       const data = JSON.parse(ev.target.result);
       if (!data.tasks||!data.records) throw 0;
       if (!confirm(`タスク${data.tasks.length}件・記録${data.records.length}件を復元します。現在のデータは上書きされます。よろしいですか？`)) return;
+      // 復元前に実行中タイマーを解除
+      active = null; localStorage.removeItem('tt_active');
       tasks = data.tasks; records = data.records;
       saveTasks(); saveRecs(); alert('復元しました！'); renderTasks();
     } catch { alert('ファイルの読み込みに失敗しました。'); }
@@ -738,7 +757,7 @@ function importJSON(e) {
 function exportCSV(recFilter) {
   const rows = [['日付','タスク','開始時刻','終了時刻','時間（分）','時間（秒）']];
   const target = recFilter ? records.filter(recFilter) : records;
-  target.sort((a,b)=>a.startTime-b.startTime).forEach(r => {
+  [...target].sort((a,b)=>a.startTime-b.startTime).forEach(r => {
     const t = tasks.find(x=>x.id===r.taskId);
     rows.push([r.date, t?t.name:'削除済み', r.startTime?fmtTimeInput(new Date(r.startTime)):'', r.endTime?fmtTimeInput(new Date(r.endTime)):'', Math.round(r.duration/60), r.duration]);
   });
